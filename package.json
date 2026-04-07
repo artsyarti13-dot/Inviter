@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "start": "node bot.js"
+  },
   "dependencies": {
     "debug": "^4.4.3",
     "discord.js-selfbot-v13": "^3.7.1"
