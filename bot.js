@@ -7,20 +7,18 @@ const CHANNEL_IDS = [
   '1078394026190962719',
   '1079276847365357599',
   '1079276828189020230',
-'1137728294427570196',
-'1137728344658546729',
-'1137728376224882718',
-'1137728590922928238',
-'1137728671491297401',
-'1054901030644617327',
-'1061825536449593365',
-'1061825928155643908',
-'1061826016345071636',
-'1061826190190587925',
-'1061826335317696552',
-'1061826526913507429',
-
-
+  '1137728294427570196',
+  '1137728344658546729',
+  '1137728376224882718',
+  '1137728590922928238',
+  '1137728671491297401',
+  '1054901030644617327',
+  '1061825536449593365',
+  '1061825928155643908',
+  '1061826016345071636',
+  '1061826190190587925',
+  '1061826335317696552',
+  '1061826526913507429',
 ];
 const IGNORED_USER_IDS = [
   '1490085623304814695',
@@ -32,10 +30,14 @@ Now join this server for lots of fun! We do not have a whitelist so you can join
 The server is crossplay so both java and bedrock can play AND Cracked launchers are also able to join
 Dm me to join or join using the invite link in my bio`;
 const MESSAGE2 = `Dm me to join a fun lifesteal server that both java and bedrock can play(cracked launchers enabled)`;
+
+// Use Maps instead of plain objects, with a max size cap
 const recentlySent1 = {};
 const recentlySent2 = {};
-const sentMessages1 = {};
-const sentMessages2 = {};
+const sentMessages1 = new Map();
+const sentMessages2 = new Map();
+
+const MAX_SENT_MESSAGES = 300;
 
 function startBot(token, message, delayMs, tracker, sentMessages) {
   const client = new Client();
@@ -43,6 +45,7 @@ function startBot(token, message, delayMs, tracker, sentMessages) {
   client.on('ready', () => {
     console.log(`Logged in as ${client.user.tag}`);
 
+    // Interval to resend if someone else has the latest message
     setInterval(async () => {
       for (const channelId of CHANNEL_IDS) {
         try {
@@ -59,20 +62,38 @@ function startBot(token, message, delayMs, tracker, sentMessages) {
         }
       }
     }, 3000);
+
+    // Periodic cleanup: trim sentMessages if it grows too large
+    setInterval(() => {
+      while (sentMessages.size > MAX_SENT_MESSAGES) {
+        const firstKey = sentMessages.keys().next().value;
+        sentMessages.delete(firstKey);
+      }
+      console.log(`[Cleanup] sentMessages size: ${sentMessages.size}`);
+    }, 60000);
   });
 
   client.on('messageCreate', async (msg) => {
     if (msg.author.id === client.user.id) return;
     if (!CHANNEL_IDS.includes(msg.channelId)) return;
     if (IGNORED_USER_IDS.includes(msg.author.id)) return;
+
     const key = `${msg.channelId}-${msg.id}`;
     if (tracker[key]) return;
     tracker[key] = true;
     setTimeout(() => delete tracker[key], 10000);
+
     setTimeout(async () => {
       try {
         const sent = await msg.channel.send(message);
-        sentMessages[msg.id] = sent;
+
+        // Cap the map size before adding
+        if (sentMessages.size >= MAX_SENT_MESSAGES) {
+          const firstKey = sentMessages.keys().next().value;
+          sentMessages.delete(firstKey);
+        }
+        sentMessages.set(msg.id, sent);
+
         console.log(`Sent message after ${msg.author.tag} posted`);
       } catch (err) {
         console.error('Failed to send:', err.message);
@@ -81,10 +102,10 @@ function startBot(token, message, delayMs, tracker, sentMessages) {
   });
 
   client.on('messageDelete', async (msg) => {
-    if (sentMessages[msg.id]) {
+    if (sentMessages.has(msg.id)) {
       try {
-        await sentMessages[msg.id].delete();
-        delete sentMessages[msg.id];
+        await sentMessages.get(msg.id).delete();
+        sentMessages.delete(msg.id);
         console.log('Deleted our message because trigger was deleted');
       } catch (err) {
         console.error('Failed to delete:', err.message);
